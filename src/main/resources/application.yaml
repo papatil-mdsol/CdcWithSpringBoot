@@ -13,20 +13,12 @@ spring:
 
 ## Source Database Properties
 customer:
-  datasource1:
+  datasource:
     host: localhost
     port: 3305
     database: customerdb
     username: root
     password: root
-
-  datasource2:
-    host: localhost
-    port: 3304
-    database: customerdb
-    username: root
-    password: root
-
 
  ## Logging properties
 logging:
