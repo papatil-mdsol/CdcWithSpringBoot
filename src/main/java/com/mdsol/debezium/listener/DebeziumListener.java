@@ -32,18 +32,12 @@ public class DebeziumListener {
 
   private final Executor executor = Executors.newSingleThreadExecutor();
   private final CustomerService customerService;
-  private final DebeziumEngine<RecordChangeEvent<SourceRecord>> debeziumEngine1;
-  private final DebeziumEngine<RecordChangeEvent<SourceRecord>> debeziumEngine2;
+  private final DebeziumEngine<RecordChangeEvent<SourceRecord>> debeziumEngine;
 
-  public DebeziumListener(Configuration customerConnectorConfiguration1,CustomerService customerService) {
+  public DebeziumListener(Configuration customerConnectorConfiguration, CustomerService customerService) {
 
-    this.debeziumEngine1 = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
-      .using(customerConnectorConfiguration1.asProperties())
-      .notifying(this::handleChangeEvent)
-      .build();
-
-    this.debeziumEngine2 = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
-      .using(customerConnectorConfiguration1.asProperties())
+    this.debeziumEngine = DebeziumEngine.create(ChangeEventFormat.of(Connect.class))
+      .using(customerConnectorConfiguration.asProperties())
       .notifying(this::handleChangeEvent)
       .build();
 
@@ -55,40 +49,36 @@ public class DebeziumListener {
 
     log.info("Key = '" + sourceRecord.key() + "' value = '" + sourceRecord.value() + "'");
 
-    Struct sourceRecordChangeValue= (Struct) sourceRecord.value();
+    Struct sourceRecordChangeValue = (Struct) sourceRecord.value();
 
     if (sourceRecordChangeValue != null) {
       Operation operation = Operation.forCode((String) sourceRecordChangeValue.get(OPERATION));
 
-      if(operation != Operation.READ) {
-        String dbRecord = operation == Operation.DELETE ? BEFORE : AFTER; // Handling Update & Insert operations.
+//      if(operation != Operation.READ) {
+      String dbRecord = operation == Operation.DELETE ? BEFORE : AFTER; // Handling Update & Insert operations.
 
-        Struct struct = (Struct) sourceRecordChangeValue.get(dbRecord);
-        Map<String, Object> payload = struct.schema().fields().stream()
-          .map(Field::name)
-          .filter(fieldName -> struct.get(fieldName) != null)
-          .map(fieldName -> Pair.of(fieldName, struct.get(fieldName)))
-          .collect(toMap(Pair::getKey, Pair::getValue));
+      Struct struct = (Struct) sourceRecordChangeValue.get(dbRecord);
+      Map<String, Object> payload = struct.schema().fields().stream()
+        .map(Field::name)
+        .filter(fieldName -> struct.get(fieldName) != null)
+        .map(fieldName -> Pair.of(fieldName, struct.get(fieldName)))
+        .collect(toMap(Pair::getKey, Pair::getValue));
 
-        this.customerService.replicateData(payload, operation);
-        log.info("Updated Data: {} with Operation: {}", payload, operation.name());
-      }
+      this.customerService.replicateData(payload, operation);
+      log.info("Updated Data: {} with Operation: {}", payload, operation.name());
+//      }
     }
   }
 
   @PostConstruct
   private void start() {
-    this.executor.execute(debeziumEngine1);
-    this.executor.execute(debeziumEngine2);
+    this.executor.execute(debeziumEngine);
   }
 
   @PreDestroy
   private void stop() throws IOException {
-    if (this.debeziumEngine1 != null) {
-      this.debeziumEngine1.close();
-    }
-    if (this.debeziumEngine2 != null) {
-      this.debeziumEngine2.close();
+    if (this.debeziumEngine != null) {
+      this.debeziumEngine.close();
     }
   }
 
